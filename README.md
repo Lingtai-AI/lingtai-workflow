@@ -16,7 +16,7 @@ Accepted workflows are listed here after review. Each workflow is a self-contain
 
 | Workflow | Use when | Avoid when | Evidence / benchmark case | Author | Last reviewed | Details |
 |---|---|---|---|---|---|---|
-| _No accepted workflows yet._ | | | | | | |
+| multi-model-daemon-orchestration | A task mixes 2+ of: architecture/decomposition, domain judgment, large-file construction, hard red-team review, human-facing delivery | A single short answer with no files/validation; or treating the table as a fixed ranking or standing authorization | Recurring practice across research/paper/code/eval deliverables; plus a preliminary single-day Grok routing probe (not a benchmark claim) | Runyuan Wang / 9s5bz2jvd2-lang | 2026-06-27 | [`workflows/multi-model-daemon-orchestration/`](workflows/multi-model-daemon-orchestration/SKILL.md) |
 
 ## Submit a workflow
 
