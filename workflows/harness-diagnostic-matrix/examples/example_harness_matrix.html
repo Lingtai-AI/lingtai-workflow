@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clinical Nutrition Eval Harness — 诊断矩阵（示例）</title>
+<style>
+  :root {
+    --bg:#0f1419; --panel:#161c24; --line:#2a3340; --ink:#e6edf3;
+    --muted:#8a98a8; --accent:#5ab0a8; --high:#e06c75; --med:#d8a657;
+    --low:#7a8896; --insuf:#9a86c4;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;
+    font-size:14px; line-height:1.55;
+  }
+  .wrap { max-width:1180px; margin:0 auto; padding:28px 22px 40px; }
+  .banner {
+    background:var(--panel); border:1px solid var(--accent);
+    border-radius:10px; padding:14px 18px; margin-bottom:18px;
+    font-size:15px; letter-spacing:.5px; color:var(--ink);
+  }
+  .banner b { color:var(--accent); }
+  h1 { font-size:20px; margin:6px 0 2px; }
+  .meta { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .meta span { margin-right:16px; }
+  .nodestrip {
+    display:flex; flex-wrap:wrap; gap:8px; margin:0 0 20px;
+  }
+  .node {
+    background:var(--panel); border:1px solid var(--line); color:var(--accent);
+    border-radius:7px; padding:6px 12px; font-size:13px; font-weight:600;
+  }
+  table {
+    width:100%; border-collapse:collapse; background:var(--panel);
+    border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  }
+  th, td {
+    border:1px solid var(--line); padding:9px 11px; vertical-align:top;
+    text-align:left; font-size:13px;
+  }
+  th { background:#1d2530; color:var(--muted); font-weight:600; white-space:nowrap; }
+  td.sev-high { color:var(--high); font-weight:700; }
+  td.sev-med { color:var(--med); font-weight:700; }
+  td.sev-low { color:var(--low); font-weight:700; }
+  td.conf-high { color:var(--accent); font-weight:600; }
+  td.conf-med { color:var(--med); font-weight:600; }
+  td.conf-low { color:var(--low); font-weight:600; }
+  td.conf-insuf { color:var(--insuf); font-weight:600; }
+  .legend {
+    margin-top:18px; color:var(--muted); font-size:12px;
+    display:flex; flex-wrap:wrap; gap:18px;
+  }
+  .legend b { color:var(--ink); }
+  .note {
+    margin-top:22px; padding:14px 16px; background:var(--panel);
+    border:1px solid var(--line); border-left:3px solid var(--insuf);
+    border-radius:8px; color:var(--muted); font-size:12.5px;
+  }
+  .note b { color:var(--ink); }
+  footer { margin-top:24px; color:var(--muted); font-size:11.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner"><b>矩阵在于诊断；如何做，是人的事。</b></div>
+  <h1>Clinical Nutrition Eval Harness — 诊断矩阵（示例）</h1>
+  <div class="meta"><span>Harness: Clinical Nutrition Eval Harness</span><span>日期: 2026-06-29</span><span>范围: 本次只看了 run-2026-06-28 的 50 条评测 + 评分日志 + 模型调用 ledger 片段；未读全量历史 run。</span></div>
+  <div class='nodestrip'><span class='node'>模型输出</span><span class='node'>评分管线</span><span class='node'>数据加载</span><span class='node'>模型调用 / 鉴权</span><span class='node'>通道 / 地址</span><span class='node'>调度 / 并发</span><span class='node'>模型调用</span><span class='node'>入口 / 问诊</span><span class='node'>交付 / 报告</span></div>
+  <table>
+    <thead><tr><th>症状 / 主诉</th><th>系统节点 / 病位</th><th>证据指针</th><th>可能原因 / 问题假设</th><th>鉴别 / 竞争假设</th><th>下一步最小证据 / 问题</th><th>严重度</th><th>置信度</th></tr></thead>
+    <tbody>
+<tr><td class=''>约 1/3 的评测条目返回空内容或被截断的 JSON</td><td class=''>模型输出<br>· 评分管线</td><td class=''>run-2026-06-28 中 17/50 条 finish_reason=length<br>· 请求体 max_tokens=512，被截样本平均输出 511 token</td><td class=''>输出预算过小导致截断（max_tokens 太低），评分器把截断样本判为错误</td><td class=''>· 模型本身在长答上不稳定（与预算无关）<br>· 评分器对合法但简短的答案误判</td><td class=''>· 取 5 条被截样本，对照 max_tokens 提到 2048 后的 finish_reason 是否变 stop；再核对评分器对完整答案的判定</td><td class='sev-high'>high</td><td class='conf-med'>medium</td></tr>
+<tr><td class=''>同一题在不同 run 之间分数波动很大</td><td class=''>评分管线<br>· 数据加载</td><td class=''>题 Q14 在 3 次 run 的得分为 1.0 / 0.0 / 1.0<br>· 评分 prompt 模板含一处随机示例抽样，seed 未固定</td><td class=''>评分时的少样本示例未固定 seed，引入评分噪声</td><td class=''>· 模型采样温度过高导致答案本身不稳定<br>· 参考答案集本身存在歧义/多解</td><td class=''>· 固定评分示例 seed 后重跑 Q14 三次，看方差是否收敛；并抽查 Q14 参考答案是否唯一</td><td class='sev-med'>medium</td><td class='conf-low'>low</td></tr>
+<tr><td class=''>部分调用偶发 401，但不是每次</td><td class=''>模型调用 / 鉴权<br>· 通道 / 地址</td><td class=''>ledger 中 9/600 次调用 HTTP 401，集中在两个 5 分钟窗口<br>· 其余调用同 endpoint 成功</td><td class=''>证据不足以定因：可能是密钥轮换窗口内的瞬时失效，也可能是限流被错报为 401</td><td class=''>· 上游短暂限流（应为 429 但被代理改写为 401）<br>· 并发过高触发的鉴权竞态</td><td class=''>· 调取 401 窗口的响应头与上游网关日志，区分鉴权失败与限流；确认密钥轮换时间点是否与窗口重合</td><td class='sev-med'>medium</td><td class='conf-insuf'>insufficient</td></tr>
+<tr><td class=''>整轮评测耗时比上周翻倍</td><td class=''>调度 / 并发<br>· 模型调用</td><td class=''>本轮总时长 42min vs 上周 ~20min（同题集）<br>· ledger 显示平均每题串行重试 1.8 次</td><td class=''>重试次数上升拖慢整轮（重试被截断/超时触发）</td><td class=''>· 上游延迟整体升高（与重试无关）<br>· 并发度被调低导致串行化</td><td class=''>· 对比本周/上周的 p50/p95 单次调用延迟与重试计数；确认并发配置是否变更</td><td class='sev-low'>low</td><td class='conf-med'>medium</td></tr>
+<tr><td class=''>维护者反映‘评测看起来没问题但结果不可信’，说不清哪里坏</td><td class=''>入口 / 问诊<br>· 交付 / 报告</td><td class=''>无具体复现指针，仅为主观主诉<br>· 现有报告只给总分，不暴露逐题证据</td><td class=''>证据不足：主诉尚未落到可检查的节点，需先缩小问题域</td><td class=''>· 实际是上面某条已知症状的体感叠加<br>· 报告可读性问题而非评测正确性问题</td><td class=''>· 请维护者指认 1 个‘不可信’的具体题目与期望/实际，再据此映射到节点</td><td class='sev-low'>low</td><td class='conf-insuf'>insufficient</td></tr>
+    </tbody>
+  </table>
+  <div class="legend">
+    <span><b>严重度</b> 高 / 中 / 低</span>
+    <span><b>置信度</b> 高 / 中 / 低 / 证据不足</span>
+    <span><b>· </b>列前缀表示多条目</span>
+  </div>
+  <div class="note">
+    <b>诊断边界：</b>本矩阵只做问题定位 —— 症状、病位、证据、可能原因、鉴别、下一步取证。
+    它不包含修复方案、实施计划、PR 顺序或操作卡片。凡“下一步”一栏均为应收集的诊断证据或应回答的问题，
+    不是修复步骤。每条原因假设都须带证据指针；证据不足者标注为“证据不足 / insufficient”，不臆测成结论。
+  </div>
+  <footer>示例数据，与任何私有日志无关。静态诊断图示，不构成自动结论；低置信项请按证据预算补证。</footer>
+</div>
+</body>
+</html>

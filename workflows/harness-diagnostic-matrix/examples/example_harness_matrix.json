@@ -1,0 +1,91 @@
+{
+  "harness": "Clinical Nutrition Eval Harness",
+  "title": "Clinical Nutrition Eval Harness — 诊断矩阵（示例）",
+  "date": "2026-06-29",
+  "scope": "本次只看了 run-2026-06-28 的 50 条评测 + 评分日志 + 模型调用 ledger 片段；未读全量历史 run。",
+  "footer": "示例数据，与任何私有日志无关。静态诊断图示，不构成自动结论；低置信项请按证据预算补证。",
+  "rows": [
+    {
+      "symptom": "约 1/3 的评测条目返回空内容或被截断的 JSON",
+      "site": ["模型输出", "评分管线"],
+      "evidence": [
+        "run-2026-06-28 中 17/50 条 finish_reason=length",
+        "请求体 max_tokens=512，被截样本平均输出 511 token"
+      ],
+      "hypothesis": "输出预算过小导致截断（max_tokens 太低），评分器把截断样本判为错误",
+      "differentials": [
+        "模型本身在长答上不稳定（与预算无关）",
+        "评分器对合法但简短的答案误判"
+      ],
+      "next_evidence": "取 5 条被截样本，对照 max_tokens 提到 2048 后的 finish_reason 是否变 stop；再核对评分器对完整答案的判定",
+      "severity": "high",
+      "confidence": "medium"
+    },
+    {
+      "symptom": "同一题在不同 run 之间分数波动很大",
+      "site": ["评分管线", "数据加载"],
+      "evidence": [
+        "题 Q14 在 3 次 run 的得分为 1.0 / 0.0 / 1.0",
+        "评分 prompt 模板含一处随机示例抽样，seed 未固定"
+      ],
+      "hypothesis": "评分时的少样本示例未固定 seed，引入评分噪声",
+      "differentials": [
+        "模型采样温度过高导致答案本身不稳定",
+        "参考答案集本身存在歧义/多解"
+      ],
+      "next_evidence": "固定评分示例 seed 后重跑 Q14 三次，看方差是否收敛；并抽查 Q14 参考答案是否唯一",
+      "severity": "medium",
+      "confidence": "low"
+    },
+    {
+      "symptom": "部分调用偶发 401，但不是每次",
+      "site": ["模型调用 / 鉴权", "通道 / 地址"],
+      "evidence": [
+        "ledger 中 9/600 次调用 HTTP 401，集中在两个 5 分钟窗口",
+        "其余调用同 endpoint 成功"
+      ],
+      "hypothesis": "证据不足以定因：可能是密钥轮换窗口内的瞬时失效，也可能是限流被错报为 401",
+      "differentials": [
+        "上游短暂限流（应为 429 但被代理改写为 401）",
+        "并发过高触发的鉴权竞态"
+      ],
+      "next_evidence": "调取 401 窗口的响应头与上游网关日志，区分鉴权失败与限流；确认密钥轮换时间点是否与窗口重合",
+      "severity": "medium",
+      "confidence": "insufficient",
+      "insufficient_evidence": true
+    },
+    {
+      "symptom": "整轮评测耗时比上周翻倍",
+      "site": ["调度 / 并发", "模型调用"],
+      "evidence": [
+        "本轮总时长 42min vs 上周 ~20min（同题集）",
+        "ledger 显示平均每题串行重试 1.8 次"
+      ],
+      "hypothesis": "重试次数上升拖慢整轮（重试被截断/超时触发）",
+      "differentials": [
+        "上游延迟整体升高（与重试无关）",
+        "并发度被调低导致串行化"
+      ],
+      "next_evidence": "对比本周/上周的 p50/p95 单次调用延迟与重试计数；确认并发配置是否变更",
+      "severity": "low",
+      "confidence": "medium"
+    },
+    {
+      "symptom": "维护者反映‘评测看起来没问题但结果不可信’，说不清哪里坏",
+      "site": ["入口 / 问诊", "交付 / 报告"],
+      "evidence": [
+        "无具体复现指针，仅为主观主诉",
+        "现有报告只给总分，不暴露逐题证据"
+      ],
+      "hypothesis": "证据不足：主诉尚未落到可检查的节点，需先缩小问题域",
+      "differentials": [
+        "实际是上面某条已知症状的体感叠加",
+        "报告可读性问题而非评测正确性问题"
+      ],
+      "next_evidence": "请维护者指认 1 个‘不可信’的具体题目与期望/实际，再据此映射到节点",
+      "severity": "low",
+      "confidence": "insufficient",
+      "insufficient_evidence": true
+    }
+  ]
+}

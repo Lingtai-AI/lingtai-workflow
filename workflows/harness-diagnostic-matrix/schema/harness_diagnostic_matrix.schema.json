@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lingtai/workflows/harness-diagnostic-matrix/schema/harness_diagnostic_matrix.schema.json",
+  "title": "Harness Diagnostic Matrix",
+  "description": "Diagnosis-only schema for any harness (eval, clinical nutrition, LLM benchmark, code-test, data pipeline, product demo, etc.). It maps symptom -> system site -> evidence -> likely cause/problem hypothesis -> differentials -> next minimal evidence. It deliberately has NO field for fixes, implementation plans, PR sequences, or action cards. Every cause/problem hypothesis must carry an evidence pointer; if evidence is weak, mark insufficient_evidence=true and do not guess.",
+  "type": "object",
+  "required": ["harness", "rows"],
+  "additionalProperties": true,
+  "properties": {
+    "harness": {
+      "type": "string",
+      "description": "Name/kind of the harness under diagnosis."
+    },
+    "title": {
+      "type": "string",
+      "description": "Optional display title for the matrix."
+    },
+    "date": {
+      "type": "string",
+      "description": "Date the diagnosis was assembled (e.g. 2026-06-29)."
+    },
+    "scope": {
+      "type": "string",
+      "description": "Evidence scope / window actually examined (so readers know what was NOT read)."
+    },
+    "footer": {
+      "type": "string",
+      "description": "Optional boundary note shown at the bottom of the rendered matrix."
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "description": "One row per symptom/complaint being diagnosed.",
+      "items": {
+        "type": "object",
+        "required": ["symptom", "site", "evidence", "hypothesis"],
+        "additionalProperties": true,
+        "properties": {
+          "symptom": {
+            "type": "string",
+            "description": "Complaint / observed symptom in plain language."
+          },
+          "site": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ],
+            "description": "Affected system node(s) / location(s) inside the harness."
+          },
+          "evidence": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ],
+            "description": "Evidence pointer(s): log id, wake/turn index, file:line, metric, error head/tail, config diff, user-supplied snippet. REQUIRED to support any hypothesis."
+          },
+          "hypothesis": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ],
+            "description": "Likely cause / problem hypothesis. NOT a fix. Must be backed by the evidence pointer, or the row must set insufficient_evidence=true."
+          },
+          "differentials": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ],
+            "description": "Competing / alternative causes that the current evidence cannot yet rule out."
+          },
+          "next_evidence": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ],
+            "description": "Next minimal evidence to collect or question to answer to discriminate the hypotheses. This is a DIAGNOSTIC step, never a repair step."
+          },
+          "severity": {
+            "type": "string",
+            "description": "Impact severity.",
+            "enum": ["high", "medium", "low", "高", "中", "低"]
+          },
+          "confidence": {
+            "type": "string",
+            "description": "Confidence in the leading hypothesis. Use insufficient/unknown when evidence is weak.",
+            "enum": ["high", "medium", "low", "insufficient", "unknown", "高", "中", "低", "证据不足", "未知"]
+          },
+          "insufficient_evidence": {
+            "type": "boolean",
+            "description": "True when evidence does not yet support any single cause; renders the confidence cell as 'insufficient'."
+          }
+        }
+      }
+    }
+  }
+}
