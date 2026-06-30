@@ -16,7 +16,7 @@ Accepted workflows are listed here after review. Each workflow is a self-contain
 
 | Workflow | Use when | Avoid when | Evidence / benchmark case | Author | Last reviewed | Details |
 |---|---|---|---|---|---|---|
-| _No accepted workflows yet._ | | | | | | |
+| maintenance-pr-batch-triage | A contributor opens a burst of small behavior-preserving maintenance/refactor PRs and the maintainer needs a first-look inventory, risk tiering, and merge-order plan | Feature/security/schema/release changes; or when a full merge-gate review is already required for one PR | Distilled from TZZheng maintenance PR batches in `lingtai-kernel` (`#577`-`#581`, `#591`/`#592`/`#599`-`#606`), including closing `#581` as over-deduplication | mimo-1, with Jason H guidance and TZZheng example attribution | 2026-06-30 | [`workflows/maintenance-pr-batch-triage/`](workflows/maintenance-pr-batch-triage/SKILL.md) |
 
 ## Submit a workflow
 
