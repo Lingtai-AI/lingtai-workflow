@@ -24,12 +24,23 @@ from typing import Iterable
 SECRET_PATTERNS = [
     ("private_key_block", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----", re.S), "[REDACTED:private-key]"),
     ("bearer_token", re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{16,}"), "Bearer [REDACTED:bearer-token]"),
+    ("basic_auth", re.compile(r"(?i)\bBasic\s+[A-Za-z0-9+/]{16,}={0,2}"), "Basic [REDACTED:basic-auth]"),
+    ("cookie_header", re.compile(r"(?im)^(Cookie|Set-Cookie)\s*:\s*\S.*$"), r"\1: [REDACTED:cookie]"),
+    ("session_id", re.compile(r"(?i)\b(sessionid|session_id|sid|phpsessid|jsessionid|connect\.sid)\b([\s:=\"']+)([^\s\"',;{}\[]{8,})"), r"\1\2[REDACTED:session]"),
+    ("aws_access_key_id", re.compile(r"\b(?:AKIA|ASIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA)[0-9A-Z]{16}\b"), "[REDACTED:aws-access-key-id]"),
+    ("aws_secret_access_key", re.compile(r"(?i)\b(aws_secret_access_key)\b([\s:=\"']+)([A-Za-z0-9/+]{40})"), r"\1\2[REDACTED:aws-secret]"),
+    ("github_token", re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}\b"), "[REDACTED:github-token]"),
+    ("slack_token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"), "[REDACTED:slack-token]"),
     ("openai_style_key", re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"), "[REDACTED:sk-key]"),
     ("telegram_bot_token", re.compile(r"\b\d{8,12}:[A-Za-z0-9_-]{20,}\b"), "[REDACTED:telegram-token]"),
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"), "[REDACTED:jwt]"),
     ("key_value_secret", re.compile(r"(?i)\b(api[_-]?key|secret|token|password|passwd|authorization)\b([\s:=\"']+)([^\s\"',;{}\[]{8,})"), r"\1\2[REDACTED:secret-value]"),
 ]
 EMAIL_PATTERN = ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"), "[REDACTED:email]")
+
+# Marker used by every replacement. Verification must not flag its own redacted
+# output (e.g. "Set-Cookie: [REDACTED:cookie]" still matches the cookie pattern).
+SENTINEL_RE = re.compile(r"\[REDACTED:[^\]]*\]")
 
 TEXT_SUFFIXES = {".txt", ".md", ".json", ".jsonl", ".log", ".csv", ".yaml", ".yml", ".toml", ".html", ".xml"}
 SQLITE_SUFFIXES = {".sqlite", ".sqlite3", ".db"}
@@ -43,11 +54,33 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def short_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+def count_bucket(n: int) -> str:
+    """Bucket a replacement count so the share-safe manifest does not leak an exact
+    literal-derived tally that could be used to fingerprint the removed text."""
+    if n <= 0:
+        return "0"
+    if n <= 5:
+        return "1-5"
+    if n <= 20:
+        return "6-20"
+    if n <= 100:
+        return "21-100"
+    return "100+"
+
+
 @dataclass
 class Rule:
-    name: str
+    # ``rule_id`` is the ONLY identifier that may reach the shareable manifest. For
+    # built-in patterns it is a stable descriptive name; for caller literals/regexes
+    # it is a hash-derived label that never contains the raw literal or pattern text.
+    rule_id: str
     pattern: re.Pattern[str]
     replacement: str
+    origin: str  # "builtin" | "literal" | "regex" | "email"
 
 
 def load_policy(path: Path | None) -> dict:
@@ -58,16 +91,22 @@ def load_policy(path: Path | None) -> dict:
 
 
 def build_rules(policy: dict) -> list[Rule]:
-    rules = [Rule(name, pattern, repl) for name, pattern, repl in SECRET_PATTERNS]
+    rules = [Rule(name, pattern, repl, "builtin") for name, pattern, repl in SECRET_PATTERNS]
     if policy.get("redact_emails"):
         name, pattern, repl = EMAIL_PATTERN
-        rules.append(Rule(name, pattern, repl))
-    for literal in policy.get("extra_literals", []) or []:
+        rules.append(Rule(name, pattern, repl, "email"))
+    for idx, literal in enumerate(policy.get("extra_literals", []) or []):
         if not literal:
             continue
-        rules.append(Rule(f"literal:{literal[:40]}", re.compile(re.escape(str(literal))), "[REDACTED:literal]"))
-    for item in policy.get("extra_regexes", []) or []:
-        rules.append(Rule(str(item["name"]), re.compile(str(item["pattern"])), str(item.get("replacement", "[REDACTED:regex]"))))
+        # rule_id is derived from a hash of the literal, NOT the literal text itself.
+        rid = f"literal:{idx:02d}:{short_hash(str(literal))}"
+        rules.append(Rule(rid, re.compile(re.escape(str(literal))), "[REDACTED:literal]", "literal"))
+    for idx, item in enumerate(policy.get("extra_regexes", []) or []):
+        pattern = str(item["pattern"])
+        # Do not use the caller-provided name verbatim (it may describe or embed the
+        # secret); label by index + pattern hash instead.
+        rid = f"regex:{idx:02d}:{short_hash(pattern)}"
+        rules.append(Rule(rid, re.compile(pattern), str(item.get("replacement", "[REDACTED:regex]")), "regex"))
     return rules
 
 
@@ -76,7 +115,7 @@ def apply_rules(text: str, rules: list[Rule]) -> tuple[str, dict[str, int]]:
     for rule in rules:
         text, n = rule.pattern.subn(rule.replacement, text)
         if n:
-            counts[rule.name] = counts.get(rule.name, 0) + n
+            counts[rule.rule_id] = counts.get(rule.rule_id, 0) + n
     return text, counts
 
 
@@ -162,7 +201,12 @@ def verification_counts(path: Path, rules: list[Rule], policy: dict) -> dict:
     text = data.decode("utf-8", errors="ignore")
     generic = 0
     for name, pattern, _repl in SECRET_PATTERNS:
-        generic += len(pattern.findall(text))
+        for m in pattern.finditer(text):
+            # Ignore self-matches on our own redaction output: strip sentinels from the
+            # matched span and only count it if a real hit still remains.
+            stripped = SENTINEL_RE.sub("", m.group(0))
+            if pattern.search(stripped):
+                generic += 1
     forbidden = 0
     for literal in policy.get("extra_literals", []) or []:
         if literal:
@@ -186,6 +230,44 @@ def collect_inputs(paths: list[Path]) -> list[Path]:
     return out
 
 
+class OutputOverlapError(ValueError):
+    """Raised when the output directory could overwrite or re-collect inputs."""
+
+
+def _is_relative_to(child: Path, parent: Path) -> bool:
+    try:
+        child.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def assert_output_safe(output_dir: Path, input_roots: list[Path], input_files: list[Path]) -> None:
+    """Hard-error before any processing if ``output_dir`` overlaps the inputs.
+
+    All paths are already resolved. We refuse when the output directory could
+    overwrite an original input, land inside a scanned input directory, or sit at a
+    parent/ancestor that would re-collect its own generated files on a later run.
+    """
+    out = output_dir
+    # 1. output dir must not be, contain, or live inside any scanned input directory.
+    for root in input_roots:
+        if out == root or _is_relative_to(out, root) or _is_relative_to(root, out):
+            raise OutputOverlapError(
+                f"output-dir overlaps input directory (rel labels only): "
+                f"out={out.name!r} input_root={root.name!r}. "
+                "Choose an output directory that is not inside, equal to, or an ancestor of any input."
+            )
+    # 2. output dir must not be the parent of any single input file, and no input
+    #    file may already live inside the output tree (which we would collect/overwrite).
+    for f in input_files:
+        if out == f.parent or _is_relative_to(f, out):
+            raise OutputOverlapError(
+                f"output-dir is the directory of an input file (rel label only): {f.name!r}. "
+                "Original inputs must not be overwritten; pick a separate fresh output directory."
+            )
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--input", action="append", required=True, help="Input file or directory. May be repeated.")
@@ -195,17 +277,55 @@ def main(argv: list[str] | None = None) -> int:
 
     policy = load_policy(Path(args.policy)) if args.policy else {}
     rules = build_rules(policy)
-    inputs = collect_inputs([Path(x).resolve() for x in args.input])
+    input_roots = [Path(x).resolve() for x in args.input]
+    inputs = collect_inputs(input_roots)
     output_dir = Path(args.output_dir).resolve()
+
+    # Refuse overlapping output BEFORE any directory is created or file is written,
+    # so a footgun invocation can never overwrite or re-collect the originals.
+    input_dir_roots = [p for p in input_roots if p.is_dir()]
+    assert_output_safe(output_dir, input_dir_roots, inputs)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     base = Path(os.path.commonpath([str(p.parent if p.is_file() else p) for p in inputs])) if inputs else Path.cwd()
-    manifest = {"policy": policy, "inputs": [], "summary": {"files": 0, "errors": 0}}
+
+    # A share-safe rule catalog: only rule_id + origin + a pattern hash. The raw
+    # literal/regex text and any secret material never enter the shareable manifest.
+    rule_catalog = [
+        {
+            "rule_id": r.rule_id,
+            "origin": r.origin,
+            "pattern_sha256": short_hash(r.pattern.pattern),
+        }
+        for r in rules
+    ]
+    manifest = {
+        "manifest_kind": "share-safe",
+        "note": (
+            "Share-safe manifest: contains no raw policy, no raw redaction literals, "
+            "no absolute local paths, and only bucketed replacement counts. Rules are "
+            "referenced by hash-derived rule_id only."
+        ),
+        "policy_summary": {
+            "redact_emails": bool(policy.get("redact_emails")),
+            "extra_literal_count": len([x for x in (policy.get("extra_literals") or []) if x]),
+            "extra_regex_count": len(policy.get("extra_regexes") or []),
+        },
+        "rule_catalog": rule_catalog,
+        "inputs": [],
+        "summary": {"files": 0, "errors": 0},
+    }
 
     for src in inputs:
         rel = src.relative_to(base) if src.is_relative_to(base) else Path(src.name)
         dst = output_dir / rel
-        record = {"source": str(src), "output": str(dst), "source_size": src.stat().st_size, "source_sha256": sha256(src)}
+        # Relative labels only — no absolute source/output paths in the shareable manifest.
+        record = {
+            "source_rel": rel.as_posix(),
+            "output_rel": (dst.relative_to(output_dir)).as_posix(),
+            "source_size": src.stat().st_size,
+            "source_sha256": sha256(src),
+        }
         try:
             if src.suffix.lower() in SQLITE_SUFFIXES:
                 result = sanitize_sqlite_file(src, dst, rules)
@@ -215,13 +335,17 @@ def main(argv: list[str] | None = None) -> int:
                 record["skipped"] = "unsupported_binary"
                 manifest["inputs"].append(record)
                 continue
+            # Replacement counts are keyed by share-safe rule_id and bucketed so the
+            # exact literal-derived tally cannot fingerprint the removed text.
+            raw_counts = result.pop("replacement_counts", {})
             record.update(result)
+            record["replacement_count_buckets"] = {rid: count_bucket(n) for rid, n in sorted(raw_counts.items())}
             record["output_size"] = dst.stat().st_size
             record["output_sha256"] = sha256(dst)
             record["verification"] = verification_counts(dst, rules, policy)
             if record["verification"]["generic_secret_hits"] or record["verification"]["forbidden_literal_hits"]:
                 manifest["summary"]["errors"] += 1
-        except Exception as exc:  # noqa: BLE001 - manifest should record exact failing file.
+        except Exception as exc:  # noqa: BLE001 - manifest should record the failing file by relative label.
             record["error"] = f"{type(exc).__name__}: {exc}"
             manifest["summary"]["errors"] += 1
         manifest["inputs"].append(record)

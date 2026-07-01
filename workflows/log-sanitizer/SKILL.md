@@ -41,8 +41,9 @@ only the approved redacted artifact.
 - You need to attach evidence to a GitHub issue / PR / discussion without
   leaking credentials, private paths, human names, chat IDs, internal mail IDs,
   or raw tool payloads.
-- You are preparing a reproducible debugging package and need a manifest with
-  source hashes, redacted hashes, replacement counts, and verification results.
+- You are preparing a reproducible debugging package and need a share-safe
+  manifest with source hashes, redacted hashes, bucketed replacement counts keyed
+  by hash-derived rule IDs, and verification results.
 - You want a small local workflow rather than adopting an external trace SaaS,
   SDK, or runtime plugin.
 
@@ -82,18 +83,36 @@ sanitizer plus a manifest and verification gate. The benchmark is therefore not
    e-mail addresses, or other strings that must not leave the machine. Add
    `extra_regexes` only when a literal list is insufficient.
 4. **Work on a copy.** Never modify the source logs. Write redacted files into a
-   fresh output directory.
+   fresh output directory. The script enforces this: it hard-errors (before writing
+   anything) if `--output-dir` equals, sits inside, or is an ancestor of any input
+   path, so it cannot overwrite or re-collect the originals.
 5. **Run the local sanitizer.** For text / JSONL / Markdown / log files, use
    `scripts/sanitize_export.py`. It can also redact SQLite text columns into a
-   copied database and then `VACUUM INTO` a clean output database.
+   copied database and then `VACUUM INTO` a clean output database. SQLite
+   `WITHOUT ROWID` tables are not supported and fail loud (recorded as a manifest
+   error and non-zero exit); handle those inputs manually rather than shipping a
+   partially-processed database.
 6. **Verify the outgoing package.** Require zero hits for generic secret shapes
    and zero hits for every task-specific forbidden literal. If any hit remains,
    stop.
-7. **Package with evidence.** Include the redaction manifest, sha256 sums, and
-   policy file. Prefer tar/zip parts only after verification.
+7. **Package with evidence.** Include the share-safe `REDACTION_MANIFEST.json` and
+   sha256 sums. Do **not** add the raw policy file to the outgoing package — it
+   holds the very literals you removed. Prefer tar/zip parts only after verification.
 8. **Human-facing send gate.** Report what will be sent: file list, hashes,
    redaction status, and known residual risk. Send only after the relevant human
    or project rule authorizes that exact package.
+
+## What the built-in patterns cover
+
+The script redacts common credential shapes before any caller-provided literals or
+regexes: private-key blocks, `Bearer` and `Basic` auth headers, `Cookie` /
+`Set-Cookie` lines and session-ID key/values, `sk-` / JWT / Telegram-bot tokens,
+AWS access-key IDs and `aws_secret_access_key` values, GitHub (`ghp_`/`gho_`/…) and
+Slack (`xox…`) token shapes, and generic `api_key/secret/token/password/authorization`
+key/value pairs. Verification re-scans the redacted output with the same built-in
+set (ignoring the script's own `[REDACTED:…]` markers), so a shape the patterns do
+not know about can still report clean — add task-specific `extra_literals` /
+`extra_regexes` for anything outside this list and treat the gate as advisory.
 
 ## Local helper scripts
 
@@ -119,8 +138,12 @@ python3 workflows/log-sanitizer/scripts/selftest_log_sanitizer.py
 
 - `sanitize_export.py` exits 0.
 - `selftest_log_sanitizer.py` exits 0 and prints the PASS line.
-- The generated `REDACTION_MANIFEST.json` lists every input, output, replacement
-  count, sha256, and verification hit count.
+- The generated `REDACTION_MANIFEST.json` is share-safe: it lists inputs/outputs by
+  relative label only (no absolute local paths), references rules by hash-derived
+  `rule_id` (never the raw literal/regex text), reports replacement counts as
+  buckets rather than exact literal-derived tallies, and carries only a policy
+  *summary* — never the raw policy or raw `extra_literals`. It still includes source
+  and redacted sha256 sums and verification hit counts so evidence stays useful.
 - The verification section reports `generic_secret_hits: 0` and
   `forbidden_literal_hits: 0` for every outgoing file.
 - A final grep/scan over the packaged artifact confirms no raw token/password/API
@@ -129,6 +152,12 @@ python3 workflows/log-sanitizer/scripts/selftest_log_sanitizer.py
 ## Failure signals
 
 - The script cannot decode a file and the workflow silently skips it.
+- Someone points `--output-dir` at (or inside) an input directory to "clean in
+  place." The script now refuses this, but bypassing the guard would overwrite the
+  originals — never do it.
+- The manifest or any packaged file still shows a raw private literal, absolute
+  local path, or the raw policy — the manifest is meant to be share-safe; treat any
+  such leak as a stop condition.
 - SQLite redaction fails but the original database is still included.
 - Output verification has nonzero hits and the agent dismisses them as "probably
   false positives" without human review.
