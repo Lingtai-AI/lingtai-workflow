@@ -54,10 +54,6 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def short_hash(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
-
-
 def count_bucket(n: int) -> str:
     """Bucket a replacement count so the share-safe manifest does not leak an exact
     literal-derived tally that could be used to fingerprint the removed text."""
@@ -76,7 +72,8 @@ def count_bucket(n: int) -> str:
 class Rule:
     # ``rule_id`` is the ONLY identifier that may reach the shareable manifest. For
     # built-in patterns it is a stable descriptive name; for caller literals/regexes
-    # it is a hash-derived label that never contains the raw literal or pattern text.
+    # it is an opaque sequential label (e.g. ``literal:00``) that contains neither the
+    # raw literal/pattern text nor any raw-derived hash of it.
     rule_id: str
     pattern: re.Pattern[str]
     replacement: str
@@ -98,15 +95,20 @@ def build_rules(policy: dict) -> list[Rule]:
     for idx, literal in enumerate(policy.get("extra_literals", []) or []):
         if not literal:
             continue
-        # rule_id is derived from a hash of the literal, NOT the literal text itself.
-        rid = f"literal:{idx:02d}:{short_hash(str(literal))}"
+        # rule_id is an opaque sequential label: it carries neither the literal text
+        # nor any raw-derived hash that could fingerprint it.
+        rid = f"literal:{idx:02d}"
         rules.append(Rule(rid, re.compile(re.escape(str(literal))), "[REDACTED:literal]", "literal"))
     for idx, item in enumerate(policy.get("extra_regexes", []) or []):
         pattern = str(item["pattern"])
-        # Do not use the caller-provided name verbatim (it may describe or embed the
-        # secret); label by index + pattern hash instead.
-        rid = f"regex:{idx:02d}:{short_hash(pattern)}"
-        rules.append(Rule(rid, re.compile(pattern), str(item.get("replacement", "[REDACTED:regex]")), "regex"))
+        # Do not use the caller-provided name (it may describe or embed the secret) and
+        # do not hash the pattern; label by index only so the manifest stays opaque.
+        rid = f"regex:{idx:02d}"
+        # Force a generic replacement constant. A caller-provided ``replacement`` is
+        # ignored on purpose: arbitrary policy text (e.g.
+        # "[REDACTED:acct=Jane Doe SSN 123-45-6789]") would re-inject sensitive text
+        # verbatim into the share-safe output while the manifest stays clean.
+        rules.append(Rule(rid, re.compile(pattern), "[REDACTED:regex]", "regex"))
     return rules
 
 
@@ -289,13 +291,12 @@ def main(argv: list[str] | None = None) -> int:
 
     base = Path(os.path.commonpath([str(p.parent if p.is_file() else p) for p in inputs])) if inputs else Path.cwd()
 
-    # A share-safe rule catalog: only rule_id + origin + a pattern hash. The raw
-    # literal/regex text and any secret material never enter the shareable manifest.
+    # A share-safe rule catalog: only opaque rule_id + origin. Neither the raw
+    # literal/regex text nor any pattern fingerprint enters the shareable manifest.
     rule_catalog = [
         {
             "rule_id": r.rule_id,
             "origin": r.origin,
-            "pattern_sha256": short_hash(r.pattern.pattern),
         }
         for r in rules
     ]
@@ -303,8 +304,10 @@ def main(argv: list[str] | None = None) -> int:
         "manifest_kind": "share-safe",
         "note": (
             "Share-safe manifest: contains no raw policy, no raw redaction literals, "
-            "no absolute local paths, and only bucketed replacement counts. Rules are "
-            "referenced by hash-derived rule_id only."
+            "no raw redaction patterns, no absolute local paths, no raw-input sha256, "
+            "and only bucketed replacement counts. Rules are referenced by opaque "
+            "sequential rule_id only. Any output_sha256 is redacted-output integrity "
+            "only, not a fingerprint of the raw input."
         ),
         "policy_summary": {
             "redact_emails": bool(policy.get("redact_emails")),
@@ -319,12 +322,14 @@ def main(argv: list[str] | None = None) -> int:
     for src in inputs:
         rel = src.relative_to(base) if src.is_relative_to(base) else Path(src.name)
         dst = output_dir / rel
-        # Relative labels only — no absolute source/output paths in the shareable manifest.
+        # Relative labels only — no absolute source/output paths in the shareable
+        # manifest. The original input's sha256 is intentionally omitted so the
+        # share-safe manifest carries no fingerprint of the raw input; only the
+        # redacted output's sha256 (added below) is recorded, for output integrity.
         record = {
             "source_rel": rel.as_posix(),
             "output_rel": (dst.relative_to(output_dir)).as_posix(),
             "source_size": src.stat().st_size,
-            "source_sha256": sha256(src),
         }
         try:
             if src.suffix.lower() in SQLITE_SUFFIXES:

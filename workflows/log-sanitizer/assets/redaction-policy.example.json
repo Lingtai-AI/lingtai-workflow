@@ -9,8 +9,7 @@
   "extra_regexes": [
     {
       "name": "example_project_ticket",
-      "pattern": "PRIVATE-TICKET-[0-9]+",
-      "replacement": "[REDACTED:project-ticket]"
+      "pattern": "PRIVATE-TICKET-[0-9]+"
     }
   ]
 }

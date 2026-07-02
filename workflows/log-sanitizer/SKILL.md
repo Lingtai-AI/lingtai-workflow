@@ -41,9 +41,10 @@ only the approved redacted artifact.
 - You need to attach evidence to a GitHub issue / PR / discussion without
   leaking credentials, private paths, human names, chat IDs, internal mail IDs,
   or raw tool payloads.
-- You are preparing a reproducible debugging package and need a share-safe
-  manifest with source hashes, redacted hashes, bucketed replacement counts keyed
-  by hash-derived rule IDs, and verification results.
+- You are preparing a reproducible debugging package and need a manifest with
+  redacted-output hashes (for output integrity), bucketed replacement counts keyed
+  by opaque sequential rule IDs, and verification results. The outgoing manifest
+  deliberately omits raw-input hashes and any raw literal/pattern fingerprints.
 - You want a small local workflow rather than adopting an external trace SaaS,
   SDK, or runtime plugin.
 
@@ -81,7 +82,11 @@ sanitizer plus a manifest and verification gate. The benchmark is therefore not
    [`assets/redaction-policy.example.json`](assets/redaction-policy.example.json).
    Add task-specific `extra_literals` for names, IDs, paths, branch names,
    e-mail addresses, or other strings that must not leave the machine. Add
-   `extra_regexes` only when a literal list is insufficient.
+   `extra_regexes` only when a literal list is insufficient. A custom
+   `extra_regexes[].replacement` is **ignored on purpose**: every custom-regex
+   match is replaced with a forced generic label (`[REDACTED:regex]`) so a
+   careless or malicious replacement (e.g. one embedding a fake SSN) can never
+   re-inject sensitive text into the share-safe output.
 4. **Work on a copy.** Never modify the source logs. Write redacted files into a
    fresh output directory. The script enforces this: it hard-errors (before writing
    anything) if `--output-dir` equals, sits inside, or is an ancestor of any input
@@ -138,12 +143,20 @@ python3 workflows/log-sanitizer/scripts/selftest_log_sanitizer.py
 
 - `sanitize_export.py` exits 0.
 - `selftest_log_sanitizer.py` exits 0 and prints the PASS line.
-- The generated `REDACTION_MANIFEST.json` is share-safe: it lists inputs/outputs by
-  relative label only (no absolute local paths), references rules by hash-derived
-  `rule_id` (never the raw literal/regex text), reports replacement counts as
+- The outgoing `REDACTION_MANIFEST.json` does not contain raw literals, raw patterns,
+  raw source paths, or any raw-derived stable rule/source fingerprints: it lists
+  inputs/outputs by relative label only (no absolute local paths), references rules
+  by opaque sequential `rule_id` (never the raw literal/regex text and never a
+  pattern hash), omits the raw-input `source_sha256`, reports replacement counts as
   buckets rather than exact literal-derived tallies, and carries only a policy
-  *summary* — never the raw policy or raw `extra_literals`. It still includes source
-  and redacted sha256 sums and verification hit counts so evidence stays useful.
+  *summary* — never the raw policy or raw `extra_literals`. It still includes the
+  redacted-output sha256 (redacted-output integrity only, not a fingerprint of the
+  raw input) and verification hit counts so evidence stays useful.
+- Bucketed replacement counts are low-level metadata, not zero-knowledge. A non-`0`
+  bucket keyed by an opaque `rule_id` still discloses coarse rule-hit *presence*
+  (that a given rule matched at all, and roughly how often). Treat these buckets as
+  disclosable-but-coarse and rely on the external sharing receipt / send gate to
+  decide whether even that coarse presence is acceptable for the recipient.
 - The verification section reports `generic_secret_hits: 0` and
   `forbidden_literal_hits: 0` for every outgoing file.
 - A final grep/scan over the packaged artifact confirms no raw token/password/API

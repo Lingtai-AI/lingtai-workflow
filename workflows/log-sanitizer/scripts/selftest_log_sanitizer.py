@@ -15,6 +15,14 @@ SCRIPT = ROOT / "scripts" / "sanitize_export.py"
 # shareable manifest (blocker #1: share-safe manifest).
 PRIVATE_PATH_LITERAL = "/Users/example/private/project"
 
+# Blocker #3 (regex replacement re-injection): a careless/malicious custom regex
+# replacement that tries to smuggle sensitive text back into the share-safe output.
+# The sanitizer must ignore this replacement and use a generic label instead, so the
+# fake SSN below must NOT appear in the redacted output.
+MALICIOUS_REGEX_MATCH = "ACCT-TRIGGER-7788"
+MALICIOUS_REGEX_REPLACEMENT = "[REDACTED:acct=Jane Doe SSN 123-45-6789]"
+MALICIOUS_FAKE_SSN = "123-45-6789"
+
 
 def run(inp: Path, out: Path, policy: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
@@ -31,7 +39,8 @@ def main() -> int:
         out = base / "out"
         inp.mkdir()
         fake_sk = "sk-" + "testSECRETSECRETSECRET"
-        sample = {"token": fake_sk, "path": PRIVATE_PATH_LITERAL, "ticket": "PRIVATE-TICKET-42"}
+        sample = {"token": fake_sk, "path": PRIVATE_PATH_LITERAL, "ticket": "PRIVATE-TICKET-42",
+                  "acct": MALICIOUS_REGEX_MATCH}
         (inp / "events.jsonl").write_text(json.dumps(sample) + "\n", encoding="utf-8")
         # Extra missed-pattern shapes from the review (basic auth, cookie, AWS/GH/Slack).
         # Build fake tokens at runtime so source scanners do not flag static fixture strings.
@@ -53,7 +62,11 @@ def main() -> int:
         policy = base / "policy.json"
         policy.write_text(json.dumps({
             "extra_literals": [PRIVATE_PATH_LITERAL],
-            "extra_regexes": [{"name": "ticket", "pattern": "PRIVATE-TICKET-[0-9]+", "replacement": "[REDACTED:ticket]"}],
+            "extra_regexes": [
+                {"name": "ticket", "pattern": "PRIVATE-TICKET-[0-9]+", "replacement": "[REDACTED:ticket]"},
+                # Malicious replacement: tries to re-inject a fake SSN into share-safe output.
+                {"name": "acct", "pattern": MALICIOUS_REGEX_MATCH, "replacement": MALICIOUS_REGEX_REPLACEMENT},
+            ],
         }), encoding="utf-8")
 
         proc = run(inp, out, policy)
@@ -81,11 +94,42 @@ def main() -> int:
         if "PRIVATE-TICKET" in manifest_raw:
             print("manifest leaked forbidden ticket literal", file=sys.stderr)
             return 1
+        # No raw-derived rule/source/pattern fingerprints may reach the share manifest.
+        if "pattern_sha256" in manifest_raw:
+            print("manifest contains pattern_sha256 fingerprint", file=sys.stderr)
+            return 1
+        if "source_sha256" in manifest_raw:
+            print("manifest contains raw-input source_sha256", file=sys.stderr)
+            return 1
+        # Custom literal/regex rule_ids must be opaque (e.g. "literal:00"), never a
+        # "literal:00:<hash>" / "regex:00:<hash>" raw-derived stable fingerprint form.
+        for entry in manifest.get("rule_catalog", []):
+            rid = entry.get("rule_id", "")
+            if entry.get("origin") in {"literal", "regex"} and rid.count(":") != 1:
+                print(f"custom rule_id is not opaque: {rid!r}", file=sys.stderr)
+                return 1
 
         # Text redaction sanity, including the newly-covered header shapes.
         text = (out / "events.jsonl").read_text(encoding="utf-8")
         if fake_sk in text or "/Users/example" in text or "PRIVATE-TICKET" in text:
             print("text redaction failed", file=sys.stderr)
+            return 1
+
+        # --- Blocker #3: custom regex replacement must not re-inject sensitive text ---
+        # The matched trigger must be gone, the malicious replacement text (and its fake
+        # SSN) must NOT appear in the redacted output, and the generic regex label must
+        # be used instead. The manifest must also stay clean of the fake SSN.
+        if MALICIOUS_REGEX_MATCH in text:
+            print("custom regex did not fire on its trigger", file=sys.stderr)
+            return 1
+        if MALICIOUS_REGEX_REPLACEMENT in text or MALICIOUS_FAKE_SSN in text:
+            print("custom regex replacement re-injected sensitive text into output", file=sys.stderr)
+            return 1
+        if "[REDACTED:regex]" not in text:
+            print("custom regex did not use the generic redaction label", file=sys.stderr)
+            return 1
+        if MALICIOUS_FAKE_SSN in manifest_raw or "Jane Doe" in manifest_raw:
+            print("manifest leaked re-injected sensitive text", file=sys.stderr)
             return 1
         headers = (out / "headers.log").read_text(encoding="utf-8")
         for leaked in ("dXNlcjpwYXNzd29yZDEyMzQ1Ng==", "abcdef0123456789abcdef",
@@ -137,7 +181,25 @@ def main() -> int:
             print("original input was modified by refused file-parent run", file=sys.stderr)
             return 1
 
-    print("SELFTEST PASS: log sanitizer redacted text and sqlite samples; manifest is share-safe; output-overlap refused.")
+        # --- Positive overlap case: a sibling output dir must be ALLOWED -----------
+        # input `logs/` and output `redacted/` sitting side by side is the intended
+        # usage and must not be rejected by the overlap guard.
+        sib_base = base / "sibling"
+        logs_dir = sib_base / "logs"
+        redacted_dir = sib_base / "redacted"
+        logs_dir.mkdir(parents=True)
+        (logs_dir / "events.jsonl").write_text(json.dumps({"token": fake_sk}) + "\n", encoding="utf-8")
+        sibling = run(logs_dir, redacted_dir, policy)
+        if sibling.returncode != 0:
+            print(sibling.stdout)
+            print(sibling.stderr, file=sys.stderr)
+            print("sibling output-dir alongside input-dir was wrongly refused", file=sys.stderr)
+            return 1
+        if not (redacted_dir / "REDACTION_MANIFEST.json").exists():
+            print("sibling run produced no manifest", file=sys.stderr)
+            return 1
+
+    print("SELFTEST PASS: log sanitizer redacted text and sqlite samples; manifest is share-safe; output-overlap refused; sibling output allowed.")
     return 0
 
 
