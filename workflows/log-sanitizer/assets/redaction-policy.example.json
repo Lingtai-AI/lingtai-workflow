@@ -1,0 +1,15 @@
+{
+  "description": "Example local-only redaction policy. Copy this file, then add task-specific literals before sharing logs.",
+  "redact_emails": false,
+  "extra_literals": [
+    "EXAMPLE_LOCAL_USERNAME",
+    "/Users/example/private/project",
+    "example-internal-message-id"
+  ],
+  "extra_regexes": [
+    {
+      "name": "example_project_ticket",
+      "pattern": "PRIVATE-TICKET-[0-9]+"
+    }
+  ]
+}
