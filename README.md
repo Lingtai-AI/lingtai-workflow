@@ -17,7 +17,7 @@ Accepted workflows are listed here after review. Each workflow is a self-contain
 | Workflow | Use when | Avoid when | Evidence / benchmark case | Author | Last reviewed | Details |
 |---|---|---|---|---|---|---|
 | multi-model-daemon-orchestration | A task mixes 2+ of: architecture/decomposition, domain judgment, large-file construction, hard red-team review, human-facing delivery | A single short answer with no files/validation; or treating the table as a fixed ranking or standing authorization | Recurring practice across research/paper/code/eval deliverables; plus a preliminary single-day Grok routing probe (not a benchmark claim) | Runyuan Wang / 9s5bz2jvd2-lang | 2026-06-27 | [`workflows/multi-model-daemon-orchestration/`](workflows/multi-model-daemon-orchestration/SKILL.md) |
-
+| log-sanitizer-workflow | Preparing LingTai logs, event traces, daemon reports, or exported evidence bundles for sharing | No authorization to share; need live runtime tracing/dashboard; verification still has hits | Recent LingTai log-sharing cleanup pain point; local text/SQLite self-test included (not a privacy guarantee) | Runyuan Wang / 9s5bz2jvd2-lang | 2026-06-30 | [`workflows/log-sanitizer/`](workflows/log-sanitizer/SKILL.md) |
 ## Submit a workflow
 
 Submit workflows by GitHub pull request. A workflow contribution should:
