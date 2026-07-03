@@ -191,7 +191,24 @@ at **base model + shell + loop** together.
 - **Boundary**: construction ability is not domain truth; its output must be
   re-checked by the orchestrator and any needed semantic / red-team daemon.
 
-### 7. Codex / coding-CLI body
+### 7. Kimi Code / fast coding-grunt construction body
+
+- **Strengths**: small-to-medium code edits, scripts, local refactors, repeated
+  validator / test repair, and other mechanical construction work where fast
+  file-level iteration matters.
+- **Use for**: implementation candidates, glue code, repo maintenance, local
+  project edits, and repeated verification loops after the orchestrator has
+  fixed the task boundary, files to touch, forbidden side effects, and acceptance
+  checks.
+- **Boundary**: Kimi is a construction hand, not the owner of product intent,
+  clinical / academic truth, credential safety, or public-release authority. The
+  orchestrator still frames the task, protects secrets, re-runs key validation,
+  and controls commit / push / merge.
+- **Evidence cue**: recent LingTai practice used Kimi Code as a code-grunt body
+  for local construction and verification; keep recording when it works, where
+  it fails, and what the main body had to recheck.
+
+### 8. Codex / coding-CLI body
 
 - **Strengths**: codebase navigation, patches, tests, refactors, deterministic
   verification, software-engineering-style construction.
@@ -200,7 +217,7 @@ at **base model + shell + loop** together.
 - **Boundary**: do not entrust critical tasks when local auth / credentials are
   unstable; do not output the final human narrative with no review.
 
-### 8. Plain LLM daemon (few or no tools)
+### 9. Plain LLM daemon (few or no tools)
 
 - **Strengths**: short ideas, an onlooker's mirror, local summaries, alternative
   phrasing, one-shot reasoning.
@@ -209,7 +226,7 @@ at **base model + shell + loop** together.
 - **Boundary**: not for large multi-file engineering; if the task grows, switch
   to small batches + a construction hand + a validator.
 
-### 9. Orchestrator / main body
+### 10. Orchestrator / main body
 
 - **Strengths**: continuous memory, human intent, channel discipline, the
   evidence gate, the public boundary, the final narrative.
