@@ -208,6 +208,27 @@ at **base model + shell + loop** together.
   for local construction and verification; keep recording when it works, where
   it fails, and what the main body had to recheck.
 
+#### Kimi Code vs Claude Code routing rule
+
+This is an advisory routing rule, not a fixed model ranking. Choose by job
+shape, shell loop, evidence need, and failure mode:
+
+- Use **Kimi Code** first for small-to-medium file edits, glue scripts, local
+  refactors, repeated validator / test repair, and quick "edit -> run -> fix ->
+  re-run" loops after the orchestrator has fixed scope and acceptance checks.
+- Use **Claude Code** first for larger multi-file refactors, architecture-level
+  changes, long-context debugging, and construction where global consistency is
+  more important than fast local iteration.
+- Do **not** let either body own product intent, clinical / academic truth,
+  credential safety, public-release authority, or final human-facing judgment.
+  The orchestrator still frames the task, protects secrets, reviews the diff,
+  re-runs key validation, and controls commit / push / merge.
+- Failure signal: if Kimi starts drifting on architecture, broad intent, or
+  cross-file consistency, stop and escalate to Claude Code or a stronger
+  architect/reviewer path. If Claude Code is being used only for tiny mechanical
+  repairs, downshift to Kimi or a deterministic script to avoid wasting the heavy
+  construction body.
+
 ### 8. Codex / coding-CLI body
 
 - **Strengths**: codebase navigation, patches, tests, refactors, deterministic
