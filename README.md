@@ -16,7 +16,7 @@ Accepted workflows are listed here after review. Each workflow is a self-contain
 
 | Workflow | Use when | Avoid when | Evidence / benchmark case | Author | Last reviewed | Details |
 |---|---|---|---|---|---|---|
-| _No accepted workflows yet._ | | | | | | |
+| log-sanitizer-workflow | Preparing LingTai logs, event traces, daemon reports, or exported evidence bundles for sharing | No authorization to share; need live runtime tracing/dashboard; verification still has hits | Recent LingTai log-sharing cleanup pain point; local text/SQLite self-test included (not a privacy guarantee) | Runyuan Wang / 9s5bz2jvd2-lang | 2026-06-30 | [`workflows/log-sanitizer/`](workflows/log-sanitizer/SKILL.md) |
 
 ## Submit a workflow
 
