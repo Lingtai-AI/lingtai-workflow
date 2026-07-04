@@ -1,13 +1,13 @@
 ---
 name: lingtai-release-blog-publication
 description: >-
-  Advisory workflow for publishing LingTai release blogs/logs after an authorized
-  release. Use it to audit full release-window contributors, draft bilingual web
-  copy, build the site, push to GitHub, and let the web repo's automatic deploy
-  run. It hard-codes two repeated release lessons: rejected/closed issue and PR
+  Advisory workflow for publishing LingTai release logs after an authorized
+  release. Use it to audit full release-window contributors, create the canonical
+  `/releases` archive entry, build the site, push to GitHub, and let the web
+  repo's automatic deploy run. It hard-codes two repeated release lessons: rejected/closed issue and PR
   authors still count as human contributors, and lingtai-web deploys from GitHub
   push rather than a local wrangler token path.
-version: 0.1.0
+version: 0.1.1
 author: "Jason H / lingtaidev3bot"
 tags:
   - workflow
@@ -63,7 +63,10 @@ v0.10.4 release correction:
   rejected, and rejected/unmerged PR authors count too;
 - Jason also corrected that pushing `lingtai-web` to GitHub automatically deploys
   the site, so a missing local `CLOUDFLARE_API_TOKEN` for `wrangler deploy` is not
-  a release blocker.
+  a release blocker;
+- Jason then pointed at `https://lingtai.ai/zh/releases/` as the canonical format:
+  LingTai release logs belong in the `/releases` archive, not in ad-hoc
+  `src/content/blog/release-day-*` posts.
 
 ## Procedure
 
@@ -78,12 +81,20 @@ v0.10.4 release correction:
 
 Do not assume old site paths. Inspect the live checkout before editing:
 
-- current blog/release content directories;
+- current release archive and blog content directories;
 - localized file naming convention;
 - recent release logs and tone;
 - build command and deployment expectations.
 
-Draft bilingual zh/en content when the site supports both.
+For the current `lingtai-web`, the canonical release-log surface is the
+`/releases` archive. That means adding or updating a `Release` object in
+`src/data/releases.ts`, rendered by `src/components/ReleaseDetail.astro`, so the
+site generates `/zh/releases/<id>/`, `/en/releases/<id>/`, `/wen/releases/<id>/`,
+and `/releases/<id>/`. Do **not** publish `src/content/blog/release-day-*.md` as
+the release log. Blog posts are optional companions only when the current website
+format explicitly calls for them.
+
+Draft bilingual zh/en release fields when the site supports both.
 
 ### 3. Audit public contributors across the whole release window
 
@@ -112,9 +123,14 @@ in validation/review prose only when useful and safe.
 
 ### 4. Draft with explicit contributor scope
 
-The blog should state what range was audited and what evidence classes were used.
-Mention that closed/rejected/unmerged issues and PRs are included when relevant.
-Keep the public contributor list human-only and source-supported.
+The release entry should state what range was audited and what evidence classes
+were used. Mention that closed/rejected/unmerged issues and PRs are included when
+relevant. Keep the public contributor list human-only and source-supported.
+
+For the current `lingtai-web`, fill the release-data shape rather than inventing
+a Markdown article structure: localized title/summary, feature sections with
+lead/bullets/why, contributors, validation, and links; then prepend the new
+constant to `export const releases`.
 
 ### 5. Build before pushing
 
@@ -153,8 +169,8 @@ Before final report, verify:
 - You presented a local `wrangler` token problem as the primary deployment blocker
   after the web commit was already pushed.
 - You gave Jason a public URL without also checking the source commit or build.
-- You wrote a standalone review artifact instead of following the website's
-  current release-log/blog structure.
+- You wrote a standalone review artifact or `src/content/blog/release-day-*` post
+  instead of following the website's canonical `/releases` archive structure.
 
 ## Submission record
 
