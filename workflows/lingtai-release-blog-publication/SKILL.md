@@ -7,7 +7,7 @@ description: >-
   repo's automatic deploy run. It hard-codes two repeated release lessons: rejected/closed issue and PR
   authors still count as human contributors, and lingtai-web deploys from GitHub
   push rather than a local wrangler token path.
-version: 0.1.1
+version: 0.1.2
 author: "Jason H / lingtaidev3bot"
 tags:
   - workflow
@@ -132,6 +132,10 @@ a Markdown article structure: localized title/summary, feature sections with
 lead/bullets/why, contributors, validation, and links; then prepend the new
 constant to `export const releases`.
 
+Start from `assets/release-log-template.md`. It includes the canonical publish
+destination, generated live URLs, required release-window statistics, collection
+commands, and a `src/data/releases.ts` entry skeleton.
+
 ### 5. Build before pushing
 
 Run the local site build and keep the log path or tail. Warnings such as known npm
@@ -150,6 +154,21 @@ After pushing:
 1. wait a short deployment window;
 2. verify the expected live URLs;
 3. send Jason both live URLs and GitHub source/commit links.
+
+## Required release-window statistics
+
+Every release log must include the window's measurable scope, not just prose
+highlights. At minimum, publish:
+
+- commit count per covered repo and combined total;
+- merged PR count per covered repo and combined total;
+- issue count per covered repo and combined total, with the query/window basis;
+- files changed and `+insertions / -deletions` per covered repo and combined
+  total;
+- contributor evidence classes and validation gates.
+
+If a number is not yet known, keep it as `TBD` in the draft and do not publish
+until it is resolved or Jason explicitly accepts the omission.
 
 ## Validation
 
