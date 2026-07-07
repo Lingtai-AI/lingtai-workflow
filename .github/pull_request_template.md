@@ -7,6 +7,7 @@
 - [ ] Use/avoid conditions, validation, evidence or benchmark case, and failure signals are documented.
 - [ ] Secrets, tokens, private paths, internal mail IDs, and private user data have been removed.
 - [ ] The README index is updated if this workflow should be listed.
+- [ ] `python3 scripts/validate_workflow_skills.py` passes (exit 0).
 
 ## Summary
 
