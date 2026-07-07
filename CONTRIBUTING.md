@@ -11,6 +11,8 @@ Thank you for contributing a workflow or daemon tactic.
 - Include applicable context, avoid/stop conditions, validation, evidence or benchmark case, and last-verified date.
 - Redact secrets, tokens, passwords, private paths, internal mail IDs, and private user data.
 - Do not present a workflow as a permanent rule, model ranking, or default authorization.
+- Keep the bundle installable: it must copy whole into `<agent>/.library/custom/<workflow-slug>/` with no references outside its own directory.
+- Run `python3 scripts/validate_workflow_skills.py` (stdlib-only, advisory) and confirm it passes before opening the PR.
 
 ## Review
 

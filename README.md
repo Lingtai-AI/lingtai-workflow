@@ -12,7 +12,7 @@ This repository is an **advisory reference only**:
 
 ## Workflow index
 
-Accepted workflows are listed here after review. Each workflow is a self-contained skill-style bundle with a `SKILL.md` file and any supporting `assets/`, `references/`, or `scripts/` it needs.
+Accepted workflows are installable LingTai **skill bundles**. Each workflow directory is self-contained: a `SKILL.md` with YAML frontmatter (`name`, `description`, and an advisory marker) plus any supporting `assets/`, `references/`, or `scripts/` it needs, all kept inside the bundle directory. A human can copy one bundle into an agent's skill library and use it; nothing here reaches outside its own folder.
 
 | Workflow | Use when | Avoid when | Evidence / benchmark case | Author | Last reviewed | Details |
 |---|---|---|---|---|---|---|
@@ -21,6 +21,48 @@ Accepted workflows are listed here after review. Each workflow is a self-contain
 | lingtai-release-blog-publication | Publishing LingTai release logs after an authorized release; required stats, canonical `/releases` archive format, contributor audit, and web publish path matter | Private/local artifacts, no publish authorization, unsafe private contributor evidence, or ad-hoc blog posts pretending to be release logs | 2026-07-03 v0.16.1/v0.10.4 release correction: required commit/line/issue/PR stats; rejected issue/PR authors count; `/zh/releases/` is canonical; GitHub push auto-deploys lingtai-web | Jason H / lingtaidev3bot | 2026-07-03 | [`workflows/lingtai-release-blog-publication/`](workflows/lingtai-release-blog-publication/SKILL.md) |
 | log-sanitizer-workflow | Preparing LingTai logs, event traces, daemon reports, or exported evidence bundles for sharing | No authorization to share; need live runtime tracing/dashboard; verification still has hits | Recent LingTai log-sharing cleanup pain point; local text/SQLite self-test included (not a privacy guarantee) | Runyuan Wang / 9s5bz2jvd2-lang | 2026-06-30 | [`workflows/log-sanitizer/`](workflows/log-sanitizer/SKILL.md) |
 | maintenance-pr-batch-triage | A contributor opens a burst of small behavior-preserving maintenance/refactor PRs and the maintainer needs a first-look inventory, risk tiering, and merge-order plan | Feature/security/schema/release changes; or when a full merge-gate review is already required for one PR | Distilled from TZZheng maintenance PR batches in `lingtai-kernel` (`#577`-`#581`, `#591`/`#592`/`#599`-`#606`), including closing `#581` as over-deduplication | mimo-1, with Jason H guidance and TZZheng example attribution | 2026-06-30 | [`workflows/maintenance-pr-batch-triage/`](workflows/maintenance-pr-batch-triage/SKILL.md) |
+
+## Install and use a workflow as a skill bundle
+
+Each accepted workflow is a skill bundle you install by copying its directory,
+whole, into an agent's custom skill library:
+
+```
+<agent>/.library/custom/<workflow-slug>/
+```
+
+Copy the entire `workflows/<slug>/` directory (its `SKILL.md` and every
+`assets/`, `references/`, `scripts/` file) so the bundle stays self-contained.
+The agent then discovers it like any other skill via the `name` and
+`description` in `SKILL.md`.
+
+A future LingTai TUI may expose a community-workflow entry that performs this
+copy for you; until that exists, the install is a manual directory copy. Either
+way the bundle format is the same self-contained directory.
+
+**Refresh requirement.** Installed bundles are point-in-time copies. Entries here
+age, get corrected, or are removed. Re-copy the bundle when you want the current
+version, and re-judge it against the current task before use — an installed copy
+is not a standing rule or a default authorization. `last_verified` in each
+`SKILL.md` tells you how fresh the source entry was at review time.
+
+## Validate the bundles
+
+`scripts/validate_workflow_skills.py` checks that every `workflows/*/SKILL.md` is
+a well-formed installable skill bundle. It is stdlib-only (no install step) and
+advisory: it never touches the LingTai runtime or kernel and defines no
+marketplace protocol.
+
+```
+python3 scripts/validate_workflow_skills.py
+```
+
+It **fails** (nonzero exit) on real packaging defects — missing or unparseable
+`SKILL.md` frontmatter, a missing `name`/`description`/`author`, no advisory
+marker, a bundle that references paths outside its own directory, or a bundle the
+index never links. It **warns** (still exit 0) on portability nits such as an
+over-long description or file, a missing `last_verified`, or a frontmatter `name`
+that differs from the directory slug. Run it before opening a workflow PR.
 
 ## Submit a workflow
 
@@ -32,6 +74,7 @@ Submit workflows by GitHub pull request. A workflow contribution should:
 4. Describe when to use it, when not to use it, required evidence or benchmark case, validation, and failure signals.
 5. Remove secrets, private paths, internal mail IDs, raw tokens, and private user data.
 6. State that the workflow is advisory-only.
+7. Run `python3 scripts/validate_workflow_skills.py` and confirm it passes.
 
 See [`templates/workflow-bundle/SKILL.md`](templates/workflow-bundle/SKILL.md) for the starting shape.
 
